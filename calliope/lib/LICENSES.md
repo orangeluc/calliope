@@ -1,3 +1,5 @@
+## ``nx_pylab.py``
+
 Copyright (C) 2004-2012, NetworkX Developers
 Aric Hagberg <hagberg@lanl.gov>
 Dan Schult <dschult@colgate.edu>
@@ -32,3 +34,11 @@ DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
 THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+## ``opt.py``
+
+Copyright 2015-2017 Tom Brown (FIAS), Jonas Hoersch (FIAS), David Schlachtberger (FIAS)
+
+Licensed under the Apache 2.0 Licence.
+
+Source: https://gist.github.com/nworbmot/db3d446fa3b5c388519390e46fd5d8c3/5eda8b8f3bb70eabb69385f510b6d44afd5a368f

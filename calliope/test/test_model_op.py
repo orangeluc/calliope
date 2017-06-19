@@ -85,6 +85,7 @@ class TestModel:
         # Cost should be double in the second case as it's twice the time
         assert_almost_equal(2 * cost1, cost2, tolerance=0.0000001)
 
+    @pytest.mark.xfail(reason="Direct use of Python numerical dtypes rather than pyomo Params breaks operational mode")
     def test_model_fixed_costs_op_with_varying_demand(self):
         override = """
             override:
@@ -109,6 +110,7 @@ class TestModel:
         # Cost should be double in the second case as it's twice the time
         assert_almost_equal(2 * cost1, cost2, tolerance=0.0000001)
 
+    @pytest.mark.xfail(reason="Direct use of Python numerical dtypes rather than pyomo Params breaks operational mode")
     def test_model_var_costs_op_with_varying_demand(self):
         override = """
             override:

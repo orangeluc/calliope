@@ -9,16 +9,41 @@ Basic model constraints.
 
 """
 
+import collections
+
 import pyomo.core as po  # pylint: disable=import-error
 import numpy as np
 import xarray as xr
 
+from ..lib import opt
 from .. import exceptions
 from .. import transmission
 from .. import utils
 
 
-def get_constraint_param(model, param_string, y, x, t):
+def profileit(func):
+    import cProfile
+    import pstats
+    import line_profiler
+
+    def wrapper(*args, **kwargs):
+        # datafn = func.__name__ + ".profile"  # Name the data file sensibly
+        prof = cProfile.Profile()
+        lprof = line_profiler.LineProfiler()
+        lprof.add_function(func)
+        lprof.enable_by_count()
+        retval = prof.runcall(func, *args, **kwargs)
+        lprof.disable_by_count()
+        stats = pstats.Stats(prof).sort_stats('cumulative')
+        stats.print_stats(20)  # Print first 20 lines
+        lprof.print_stats()
+        # prof.dump_stats(datafn)
+        return retval
+
+    return wrapper
+
+
+def get_constraint_param(model, param_string, y, x, t=None, as_float=False):
     """
     Function to get values for constraints which can optionally be
     loaded from file (so may have time dependency).
@@ -31,7 +56,10 @@ def get_constraint_param(model, param_string, y, x, t):
     """
 
     if param_string in model.data and y in model._sets['y_' + param_string + '_timeseries']:
-        return getattr(model.m, param_string + '_param')[y, x, t]
+        if as_float:
+            return getattr(model.m, param_string + '_param')[y, x, t].value
+        else:
+            return getattr(model.m, param_string + '_param')[y, x, t]
     else:
         return model.get_option(y + '.constraints.' + param_string, x=x)
 
@@ -107,57 +135,51 @@ def generate_variables(model):
     m.cost = po.Var(m.y, m.x, m.k, within=po.Reals)
 
 
+@profileit
 def node_resource(model):
     m = model.m
+    constraints = {}
 
-    # TODO reformulate c_r_rule conditionally once Pyomo supports that.
-    # had to remove the following formulation because it is not
-    # re-evaluated on model re-construction -- we now check for
-    # demand/supply tech instead, which means that `r` can only
-    # be ALL negative or ALL positive for a given tech!
-    # Ideally we have `elif po.value(m.r[y, x, t]) > 0:` instead of
-    # `elif y in m.y_supply or y in m.y_unmet_demand:` and `elif y in m.y_demand:`
-
-    def r_available_rule(m, y, x, t):
-        r_scale = model.get_option(y + '.constraints.r_scale', x=x)
-        force_r = get_constraint_param(model, 'force_r', y, x, t)
-
+    for y in m.y_finite_r:
         if y in m.y_sd:
-            e_eff = get_constraint_param(model, 'e_eff', y, x, t)
-            if po.value(e_eff) == 0:
-                c_prod = 0
-            else:
-                c_prod = sum(m.c_prod[c, y, x, t] for c in m.c) / e_eff # supply techs
-            c_con = sum(m.c_con[c, y, x, t] for c in m.c) * e_eff # demand techs
+            r_area_is_var = True if y in m.y_sd_r_area else False
 
-            if y in m.y_sd_r_area:
-                r_avail = (get_constraint_param(model, 'r', y, x, t) * r_scale
-                           * m.r_area[y, x])
-            else:
-                r_avail = (get_constraint_param(model, 'r', y, x, t) * r_scale)
+            def get_lhs(y, x, t, c_con_coeff):
+                e_eff = get_constraint_param(model, 'e_eff', y, x, t, as_float=True)
+                vals = [(1 / e_eff, m.c_prod[c, y, x, t]) for c in m.c] + [(c_con_coeff * e_eff, m.c_con[c, y, x, t]) for c in m.c]
+                return opt.LExpression(vals)
 
-            if force_r:
-                return c_prod + c_con == r_avail
-            else:
-                return c_prod - c_con <= r_avail
+            def get_r_eff(y, x, t):
+                return 1
 
         elif y in m.y_supply_plus:
-            r_eff = get_constraint_param(model, 'r_eff', y, x, t)
+            r_area_is_var = True if y in m.y_sp_r_area else False
 
-            if y in m.y_sp_r_area:
-                r_avail = (get_constraint_param(model, 'r', y, x, t) * r_scale
-                           * m.r_area[y, x] * r_eff)
-            else:
-                r_avail = get_constraint_param(model, 'r', y, x, t) * r_scale * r_eff
+            def get_lhs(y, x, t, c_con_coeff):
+                return opt.LExpression([(1, m.r[y, x, t])])
 
-            if force_r:
-                return m.r[y, x, t] == r_avail
-            else:
-                return m.r[y, x, t] <= r_avail
+            def get_r_eff(y, x, t):
+                return get_constraint_param(model, 'r_eff', y, x, t, as_float=True)  # Might be a time series
 
-    # Constraints
-    m.c_r_available = po.Constraint(m.y_finite_r, m.x_r, m.t,
-                                    rule=r_available_rule)
+        for x in m.x_r:
+            sense, c_con_coeff = ('==', 1) if model.get_option(y + '.constraints.force_r', x=x) else ('<=', -1)
+            r_scale = model.get_option(y + '.constraints.r_scale', x=x)
+
+            for t in m.t:
+                # Left-hand side
+                lhs = get_lhs(y, x, t, c_con_coeff)
+
+                # Right-hand side
+                r_eff = get_r_eff(y, x, t)
+                r = get_constraint_param(model, 'r', y, x, t, as_float=True)
+                if r_area_is_var:
+                    r_avail = opt.LExpression([(r_scale * r * r_eff, m.r_area[y, x])])
+                else:  # r_area is constant -> expression is constant
+                    r_avail = opt.LExpression(constant=r_scale * r * r_eff)
+
+                constraints[(y, x, t)] = opt.LConstraint(lhs=lhs, sense=sense, rhs=r_avail)
+
+    opt.l_constraint(m, 'c_r_available', constraints, m.y_finite_r, m.x_r, m.t)
 
 
 def node_energy_balance(model):
@@ -542,16 +564,46 @@ def node_constraints_build(model):
     m.c_r2_cap = po.Constraint(m.y_sp_r2, m.x_r, rule=c_r2_cap_rule)
 
 
-def node_constraints_operational(model):
+@profileit
+def node_constraints_operational_test(model):
     m = model.m
-    time_res = model.data['_time_res'].to_series()
+    time_res = model.data['_time_res'].to_series().to_dict()
 
-    # Constraint rules
-    def r_max_upper_rule(m, y, x, t):
-        """
-        set maximum resource supply. Supply_plus techs only.
-        """
-        return m.r[y, x, t] <= time_res.at[t] * m.r_cap[y, x]
+    ##
+    # r_max_upper
+    # ^^^^^^^^^^^
+    #
+    # Set maximum resource supply by constraining :math:`r(y, x, t)`
+    # to remain within :math:`r_{cap}(y, x)`.
+    # Applies to ``supply_plus`` techs only.
+    #
+    # .. math::
+    #
+    #    $r(y, x, t) \leq time\_res(t) \times r_{cap}(y, x)$
+    ##
+    constraints_r_max_upper = {
+        (y, x, t): opt.LConstraint(
+            lhs=opt.LExpression([(1, m.r[y, x, t])]),
+            sense='<=',
+            rhs=opt.LExpression([(time_res[t], m.r_cap[y, x])])
+        )
+        for y in m.y_sp_finite_r for x in m.x_r for t in m.t
+    }
+
+    opt.l_constraint(m, 'c_r_max_upper', constraints_r_max_upper, m.y_sp_finite_r, m.x_r, m.t)
+
+
+def node_constraints_operational(model):
+    ####
+    ###
+    ##
+    # OLD CONSTRAINT RULES
+    # CAUTION: time_res is now a dict, no longer a pandas.Series
+    ##
+    ###
+    ####
+    m = model.m
+    time_res_series = model.data['_time_res'].to_series()
 
     def c_prod_max_rule(m, c, y, x, t):
         """
@@ -571,7 +623,7 @@ def node_constraints_operational(model):
             return c_prod == 0
         p_eff = model.get_option(y + '.constraints.p_eff', x=x)
         if c == model.get_option(y + '.carrier', default=y + '.carrier_out'):
-            return c_prod <= time_res.at[t] * m.e_cap[y, x] * p_eff
+            return c_prod <= time_res_series.at[t] * m.e_cap[y, x] * p_eff
         else:
             return m.c_prod[c, y, x, t] == 0
 
@@ -587,7 +639,7 @@ def node_constraints_operational(model):
             return po.Constraint.Skip
         elif c == model.get_option(y + '.carrier', default=y + '.carrier_out'):
             return (m.c_prod[c, y, x, t]
-                    >= time_res.at[t] * m.e_cap[y, x] * min_use)
+                    >= time_res_series.at[t] * m.e_cap[y, x] * min_use)
         else:
             return po.Constraint.Skip
 
@@ -605,7 +657,7 @@ def node_constraints_operational(model):
         if not allow_c_prod:
             return c_prod == 0
         else:
-            return c_prod <= time_res.at[t] * m.e_cap[y, x]
+            return c_prod <= time_res_series.at[t] * m.e_cap[y, x]
 
     def c_conversion_plus_prod_min_rule(m, y, x, t):
         """
@@ -617,7 +669,7 @@ def node_constraints_operational(model):
         if not min_use or not allow_c_prod:
             return po.Constraint.NoConstraint
         else:
-            c_prod_min = time_res.at[t] * m.e_cap[y, x] * min_use
+            c_prod_min = time_res_series.at[t] * m.e_cap[y, x] * min_use
             if isinstance(c_out, dict):
                 c_prod = sum(m.c_prod[c, y, x, t] for c in c_out.keys())
             else:
@@ -638,7 +690,7 @@ def node_constraints_operational(model):
                 return po.Constraint.Skip
         if (allow_c_con is True and
                 c == model.get_option(y + '.carrier', default=y + '.carrier_in')):
-            return m.c_con[c, y, x, t] >= (-1 * time_res.at[t]
+            return m.c_con[c, y, x, t] >= (-1 * time_res_series.at[t]
                                             * m.e_cap[y, x] * p_eff)
         else:
             return m.c_con[c, y, x, t] == 0
@@ -657,7 +709,7 @@ def node_constraints_operational(model):
         if (r2_startup and t >= model.data.startup_time_bounds):
             return m.r2[y, x, t] == 0
         else:
-            return m.r2[y, x, t] <= time_res.at[t] * m.r2_cap[y, x]
+            return m.r2[y, x, t] <= time_res_series.at[t] * m.r2_cap[y, x]
 
     def c_export_max_rule(m, y, x, t):
         """
@@ -671,8 +723,8 @@ def node_constraints_operational(model):
             return po.Constraint.Skip
 
     # Constraints
-    m.c_r_max_upper = po.Constraint(
-        m.y_sp_finite_r, m.x_r, m.t, rule=r_max_upper_rule)
+    # m.c_r_max_upper = po.Constraint(
+    #     m.y_sp_finite_r, m.x_r, m.t, rule=r_max_upper_rule)
     m.c_prod_max = po.Constraint(
         m.c, m.y, m.x, m.t, rule=c_prod_max_rule)
     m.c_prod_min = po.Constraint(

@@ -1373,6 +1373,7 @@ class Model(object):
         constr = [constraints.base.node_resource,
                   constraints.base.node_energy_balance,
                   constraints.base.node_constraints_build,
+                  constraints.base.node_constraints_operational_test,
                   constraints.base.node_constraints_operational,
                   constraints.base.node_constraints_transmission,
                   constraints.base.node_costs,
