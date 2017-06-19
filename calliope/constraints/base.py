@@ -135,7 +135,7 @@ def generate_variables(model):
     m.cost = po.Var(m.y, m.x, m.k, within=po.Reals)
 
 
-@profileit
+# @profileit
 def node_resource(model):
     m = model.m
     constraints = {}
@@ -564,7 +564,7 @@ def node_constraints_build(model):
     m.c_r2_cap = po.Constraint(m.y_sp_r2, m.x_r, rule=c_r2_cap_rule)
 
 
-@profileit
+# @profileit
 def node_constraints_operational_test(model):
     m = model.m
     time_res = model.data['_time_res'].to_series().to_dict()
