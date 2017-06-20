@@ -592,6 +592,64 @@ def node_constraints_operational_test(model):
 
     opt.l_constraint(m, 'c_r_max_upper', constraints_r_max_upper, m.y_sp_finite_r, m.x_r, m.t)
 
+    ##
+    # prod_max
+    # ^^^^^^^^
+    #
+    # Set maximum carrier production. Applies to all technologies.
+    #
+    # Replicates state as of commit 99b7ea7.
+    ##
+
+    # Carr-tech-loc-time combinations that allow e_prod
+    set_prod_max_all = [
+        (c, y, x, t) for c in m.c for y in m.y for x in m.x for t in m.t
+    ]
+
+    # Carr-tech[conversion_plus]-loc-time combinations where carrier
+    # is not the conversion_plus technology's primary carrier
+    set_prod_max_skip = [
+        (c, y, x, t)
+        for (c, y, x, t) in set_prod_max_all
+        # if model.get_option(y + '.constraints.e_prod', x=x) and
+        if y in m.y_conversion_plus and c in model.get_cp_carriers(y, x)[1]
+    ]
+
+    # Carr-tech-loc-time where carrier is the configured carrier_out
+    set_prod_max_build = [
+        (c, y, x, t)
+        for (c, y, x, t) in set_prod_max_all
+        if model.get_option(y + '.constraints.e_prod', x=x) and (
+            c == model.get_option(y + '.carrier', default=y + '.carrier_out') or
+            (y in m.y_conversion_plus and c == model.get_cp_carriers(y, x)[0])
+        )
+    ]
+
+    set_prod_max = list(set(set_prod_max_build) - set(set_prod_max_skip))
+    set_prod_max_zero = list(set(set_prod_max_all) - set(set_prod_max) - set(set_prod_max_skip))
+
+    constraints_prod_max = {
+        (c, y, x, t): opt.LConstraint(
+            lhs=opt.LExpression([(1, m.c_prod[c, y, x, t])]),
+            sense='<=',
+            rhs=opt.LExpression([(time_res[t] * model.get_option(y + '.constraints.p_eff', x=x), m.e_cap[y, x])])
+        )
+        for (c, y, x, t) in set_prod_max
+    }
+
+    opt.l_constraint(m, 'c_prod_max', constraints_prod_max, set_prod_max)
+
+    constraints_prod_max_zero = {
+        (c, y, x, t): opt.LConstraint(
+            lhs=opt.LExpression([(1, m.c_prod[c, y, x, t])]),
+            sense='==',
+            rhs=opt.LExpression(constant=0)
+        )
+        for (c, y, x, t) in set_prod_max_zero
+    }
+
+    opt.l_constraint(m, 'c_prod_max_zero', constraints_prod_max_zero, set_prod_max_zero)
+
 
 def node_constraints_operational(model):
     ####
@@ -604,28 +662,6 @@ def node_constraints_operational(model):
     ####
     m = model.m
     time_res_series = model.data['_time_res'].to_series()
-
-    def c_prod_max_rule(m, c, y, x, t):
-        """
-        Set maximum carrier production. All technologies.
-        """
-        allow_c_prod = get_constraint_param(model, 'e_prod', y, x, t)
-        c_prod = m.c_prod[c, y, x, t]
-        if y in m.y_conversion_plus:  # Conversion techs with 2 or more output carriers
-            carriers_out = model.get_carrier(y, 'out', all_carriers=True)
-            if c not in carriers_out:
-                return c_prod == 0
-            if c in carriers_out and model._locations.at[x, y] == 0:
-                return c_prod == 0
-            else:
-                return po.Constraint.Skip
-        if not allow_c_prod:
-            return c_prod == 0
-        p_eff = model.get_option(y + '.constraints.p_eff', x=x)
-        if c == model.get_option(y + '.carrier', default=y + '.carrier_out'):
-            return c_prod <= time_res_series.at[t] * m.e_cap[y, x] * p_eff
-        else:
-            return m.c_prod[c, y, x, t] == 0
 
     def c_prod_min_rule(m, c, y, x, t):
         """
@@ -642,22 +678,6 @@ def node_constraints_operational(model):
                     >= time_res_series.at[t] * m.e_cap[y, x] * min_use)
         else:
             return po.Constraint.Skip
-
-    def c_conversion_plus_prod_max_rule(m, y, x, t):
-        """
-        Set maximum carrier production. Conversion_plus technologies.
-        """
-        allow_c_prod = get_constraint_param(model, 'e_prod', y, x, t)
-        c_out = model.get_option(y + '.carrier_out')
-        e_eff = get_constraint_param(model, 'e_eff', y, x, t)
-        if isinstance(c_out, dict):
-            c_prod = sum(m.c_prod[c, y, x, t] for c in c_out.keys())
-        else:
-            c_prod = m.c_prod[c_out, y, x, t]
-        if not allow_c_prod:
-            return c_prod == 0
-        else:
-            return c_prod <= time_res_series.at[t] * m.e_cap[y, x]
 
     def c_conversion_plus_prod_min_rule(m, y, x, t):
         """
@@ -725,12 +745,12 @@ def node_constraints_operational(model):
     # Constraints
     # m.c_r_max_upper = po.Constraint(
     #     m.y_sp_finite_r, m.x_r, m.t, rule=r_max_upper_rule)
-    m.c_prod_max = po.Constraint(
-        m.c, m.y, m.x, m.t, rule=c_prod_max_rule)
+    # m.c_prod_max = po.Constraint(
+    #     m.c, m.y, m.x, m.t, rule=c_prod_max_rule)
     m.c_prod_min = po.Constraint(
         m.c, m.y, m.x, m.t, rule=c_prod_min_rule)
-    m.c_conversion_plus_prod_max = po.Constraint(
-        m.y_conversion_plus, m.x, m.t, rule=c_conversion_plus_prod_max_rule)
+    # m.c_conversion_plus_prod_max = po.Constraint(
+    #     m.y_conversion_plus, m.x, m.t, rule=c_conversion_plus_prod_max_rule)
     m.c_conversion_plus_prod_min = po.Constraint(
         m.y_conversion_plus, m.x, m.t, rule=c_conversion_plus_prod_min_rule)
     m.c_con_max = po.Constraint(
