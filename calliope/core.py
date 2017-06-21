@@ -274,13 +274,13 @@ class Model(object):
                     carrier = self.get_option(
                         y + '.carrier', x=x, default=y + '.carrier_out'
                     )
-                    other_carriers = []
+                    all_carriers = []
                 else:
-                    carrier, other_carriers = self.get_cp_carriers(y, x)
+                    carrier, all_carriers = self.get_cp_carriers(y, x)
                 if export is True:
                     self.set_option(y + '.export', carrier, x=x)
                 # any instance where export is not False, but is set to some string value
-                elif export != carrier and export not in other_carriers:
+                elif export != carrier and export not in all_carriers:
                     raise exceptions.ModelError(
                         'Attempting to export carrier {} '.format(export) +
                         'from {}:{} '.format(y, x) +
@@ -657,7 +657,7 @@ class Model(object):
         primary_carrier = self.get_option(y + '.primary_carrier', x=x)
         c_2 = self.get_option(y + '.carrier_{}_2'.format(direction), x=x)
         c_3 = self.get_option(y + '.carrier_{}_3'.format(direction), x=x)
-        other_c = set()
+        all_carriers = set()
         # direction = 'out', 'primary_carrier' has to be defined if 'carrier_in'
         # contains several carriers (i.e. is a dict)
         if direction == 'out' and isinstance(c, dict):
@@ -665,22 +665,22 @@ class Model(object):
                 e = exceptions.ModelError
                 raise e('primary_carrier must be set for conversion_plus technology '
                         '`{}` as carrier_out contains multiple carriers'.format(y))
-            other_c.update(c.keys())
+            all_carriers.update(c.keys())
         elif direction == 'out' and isinstance(c, str):
-            other_c.update([c])
+            all_carriers.update([c])
             primary_carrier = c
         # direction = 'in', there is no "primary_carrier"
         elif direction == 'in':
-            other_c.update(c.keys() if isinstance(c, dict) else [c])
+            all_carriers.update(c.keys() if isinstance(c, dict) else [c])
             primary_carrier = None
-        other_c.update(c_2.keys() if isinstance(c_2, dict) else [c_2])
-        other_c.update(c_3.keys() if isinstance(c_3, dict) else [c_3])
-        other_c.discard(False) # if there is no secondary or tertiary carrier, they return False
-        if len(other_c) == 1: # only one value
-            other_c = str(list(other_c)[0])
+        all_carriers.update(c_2.keys() if isinstance(c_2, dict) else [c_2])
+        all_carriers.update(c_3.keys() if isinstance(c_3, dict) else [c_3])
+        all_carriers.discard(False) # if there is no secondary or tertiary carrier, they return False
+        if len(all_carriers) == 1: # only one value
+            all_carriers = str(list(all_carriers)[0])
         else:
-            other_c = tuple(other_c)
-        return primary_carrier, other_c
+            all_carriers = tuple(all_carriers)
+        return primary_carrier, all_carriers
 
     def scale_to_peak(self, df, peak, scale_time_res=True):
         """Returns the given dataframe scaled to the given peak value.

@@ -598,41 +598,47 @@ def node_constraints_operational_test(model):
     #
     # Set maximum carrier production. Applies to all technologies.
     #
-    # Replicates state as of commit 99b7ea7.
     ##
 
-    # Carr-tech-loc-time combinations that allow e_prod
+    # Carrier-tech-loc-time combinations that allow e_prod
     set_prod_max_all = [
         (c, y, x, t) for c in m.c for y in m.y for x in m.x for t in m.t
     ]
 
-    # Carr-tech[conversion_plus]-loc-time combinations where carrier
-    # is not the conversion_plus technology's primary carrier
+    # Carrier-tech[conversion_plus]-loc-time combinations where carrier
+    # is an output carrier, built into a later constraint:
+    # `constraints_prod_max_conversion_plus`
     set_prod_max_skip = [
         (c, y, x, t)
         for (c, y, x, t) in set_prod_max_all
-        # if model.get_option(y + '.constraints.e_prod', x=x) and
-        if y in m.y_conversion_plus and c in model.get_cp_carriers(y, x)[1]
+        if y in m.y_conversion_plus and c in model.get_cp_carriers(y, x)[1] and
+            model.get_option(y + '.constraints.e_prod', x=x) and
+            model._locations.at[x, y] == 1
     ]
 
-    # Carr-tech-loc-time where carrier is the configured carrier_out
+    # Carrier-tech-loc-time where carrier is the configured carrier_out
     set_prod_max_build = [
         (c, y, x, t)
         for (c, y, x, t) in set_prod_max_all
-        if model.get_option(y + '.constraints.e_prod', x=x) and (
-            c == model.get_option(y + '.carrier', default=y + '.carrier_out') or
-            (y in m.y_conversion_plus and c == model.get_cp_carriers(y, x)[0])
-        )
+        if model.get_option(y + '.constraints.e_prod', x=x) and
+            c == model.get_option(y + '.carrier', default=y + '.carrier_out')
     ]
 
-    set_prod_max = list(set(set_prod_max_build) - set(set_prod_max_skip))
-    set_prod_max_zero = list(set(set_prod_max_all) - set(set_prod_max) - set(set_prod_max_skip))
+    # Some skipped combinations need to be removed from the `build` set
+    set_prod_max = list(set(set_prod_max_build) -
+                        set(set_prod_max_skip))
+
+    # Everything that isn't built or skipped should be set to zero
+    set_prod_max_zero = list(set(set_prod_max_all) -
+                             set(set_prod_max) -
+                             set(set_prod_max_skip))
 
     constraints_prod_max = {
         (c, y, x, t): opt.LConstraint(
             lhs=opt.LExpression([(1, m.c_prod[c, y, x, t])]),
             sense='<=',
-            rhs=opt.LExpression([(time_res[t] * model.get_option(y + '.constraints.p_eff', x=x), m.e_cap[y, x])])
+            rhs=opt.LExpression([(time_res[t] *
+                model.get_option(y + '.constraints.p_eff', x=x), m.e_cap[y, x])])
         )
         for (c, y, x, t) in set_prod_max
     }
@@ -650,6 +656,30 @@ def node_constraints_operational_test(model):
 
     opt.l_constraint(m, 'c_prod_max_zero', constraints_prod_max_zero, set_prod_max_zero)
 
+    # Tech[conversion_plus]-loc[conversion]-time combinations, previously skipped.
+    # This set sums carriers, so cannot be included in the (carrier, tech, loc, time)
+    # sets of the other prod_max constraints.
+    set_prod_max_conversion_plus_build = [
+        (y, x, t)
+        for y in m.y_conversion_plus for x in m.x_conversion for t in m.t
+    ]
+
+    constraints_prod_max_conversion_plus = {
+        (y, x, t): opt.LConstraint(
+            lhs=opt.LExpression([(1, sum(m.c_prod[c, y, x, t]
+                for c in model.get_option(y + '.carrier_out').keys())
+                if isinstance(model.get_option(y + '.carrier_out'), dict)
+                else m.c_prod[model.get_option(y + '.carrier_out'), y, x, t]
+                )]),
+            sense='<=',
+            rhs=opt.LExpression([(time_res[t], m.e_cap[y, x])])
+        )
+        for (y, x, t) in set_prod_max_conversion_plus_build
+    }
+
+    opt.l_constraint(m, 'c_prod_max_conversion_plus',
+                     constraints_prod_max_conversion_plus,
+                     set_prod_max_conversion_plus_build)
 
 def node_constraints_operational(model):
     ####
