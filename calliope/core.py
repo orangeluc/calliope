@@ -1324,23 +1324,23 @@ class Model(object):
 
         # 1. Required
         constr = [constraints.base.node_resource,
-                  constraints.base.unit_commitment,
+#                  constraints.base.unit_commitment,
                   constraints.base.node_energy_balance,
                   constraints.base.node_constraints_build,
                   constraints.base.node_constraints_operational,
                   constraints.base.node_constraints_transmission,
                   constraints.base.node_costs,
                   constraints.base.model_constraints]
-        if self.mode == 'plan':
-            constr += [constraints.planning.system_margin,
-                       constraints.planning.node_constraints_build_total]
+#        if self.mode == 'plan':
+#            constr += [constraints.planning.system_margin,
+#                       constraints.planning.node_constraints_build_total]
         for c in constr:
             self.add_constraint(c)
 
         # 2. Optional
-        if self.config_model.get_key('constraints', default=False):
-            for c in self.config_model.constraints:
-                self.add_constraint(utils._load_function(c))
+#        if self.config_model.get_key('constraints', default=False):
+#            for c in self.config_model.constraints:
+#                self.add_constraint(utils._load_function(c))
 
         # 3. Objective function
         default_obj = 'constraints.objective.objective_cost_minimization'

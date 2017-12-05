@@ -206,8 +206,8 @@ def unit_commitment(model):
 
         return m.operating_units[loc_tech, t] <= m.units[loc_tech]
 
-    m.c_unit_commitment = po.Constraint(m.loc_tech_milp, m.t,
-                                        rule=c_unit_commitment_rule)
+#    m.c_unit_commitment = po.Constraint(m.loc_tech_milp, m.t,
+#                                        rule=c_unit_commitment_rule)
 
 def node_energy_balance(model):
     m = model.m
@@ -364,18 +364,18 @@ def node_energy_balance(model):
     # Constraints
     m.c_balance_transmission = po.Constraint(m.loc_tech_transmission, m.t,
                                             rule=transmission_rule)
-    m.c_balance_conversion = po.Constraint(m.loc_tech_conversion, m.t,
-                                            rule=conversion_rule)
-    m.c_balance_conversion_plus = po.Constraint(m.loc_tech_conversion_plus, m.t,
-                                            rule=conversion_plus_primary_rule)
-    m.c_balance_conversion_plus_secondary_out = po.Constraint(m.loc_tech_2out, m.t,
-                                            rule=conversion_plus_secondary_out_rule)
-    m.c_balance_conversion_plus_tertiary_out = po.Constraint(m.loc_tech_3out, m.t,
-                                            rule=conversion_plus_tertiary_out_rule)
-    m.c_balance_conversion_plus_secondary_in = po.Constraint(m.loc_tech_2in, m.t,
-                                            rule=conversion_plus_secondary_in_rule)
-    m.c_balance_conversion_plus_tertiary_in = po.Constraint(m.loc_tech_3in, m.t,
-                                            rule=conversion_plus_tertiary_in_rule)
+#    m.c_balance_conversion = po.Constraint(m.loc_tech_conversion, m.t,
+#                                            rule=conversion_rule)
+#    m.c_balance_conversion_plus = po.Constraint(m.loc_tech_conversion_plus, m.t,
+#                                            rule=conversion_plus_primary_rule)
+#    m.c_balance_conversion_plus_secondary_out = po.Constraint(m.loc_tech_2out, m.t,
+#                                            rule=conversion_plus_secondary_out_rule)
+#    m.c_balance_conversion_plus_tertiary_out = po.Constraint(m.loc_tech_3out, m.t,
+#                                            rule=conversion_plus_tertiary_out_rule)
+#    m.c_balance_conversion_plus_secondary_in = po.Constraint(m.loc_tech_2in, m.t,
+#                                            rule=conversion_plus_secondary_in_rule)
+#    m.c_balance_conversion_plus_tertiary_in = po.Constraint(m.loc_tech_3in, m.t,
+#                                            rule=conversion_plus_tertiary_in_rule)
     m.c_balance_supply_plus = po.Constraint(m.loc_tech_supply_plus, m.t,
                                             rule=supply_plus_rule)
     m.c_balance_storage = po.Constraint(m.loc_tech_storage, m.t,
@@ -717,10 +717,10 @@ def node_constraints_build(model):
     m.c_r_area = po.Constraint(m.loc_tech_area, rule=c_r_area_rule)
     m.c_r_area_per_e_cap = po.Constraint(m.loc_tech_area, rule=c_r_area_per_e_cap_rule)
     m.c_e_cap = po.Constraint(m.loc_tech, rule=c_e_cap_rule)
-    m.c_e_cap_min = po.Constraint(m.loc_tech, rule=c_e_cap_min_rule)
+#    m.c_e_cap_min = po.Constraint(m.loc_tech, rule=c_e_cap_min_rule)
     m.c_e_cap_storage = po.Constraint(m.loc_tech_store, rule=c_e_cap_storage_rule)
-    m.c_r2_cap = po.Constraint(m.loc_tech_r2, rule=c_r2_cap_rule)
-    m.c_units = po.Constraint(m.loc_tech_milp, rule=c_units_rule)
+#    m.c_r2_cap = po.Constraint(m.loc_tech_r2, rule=c_r2_cap_rule)
+#    m.c_units = po.Constraint(m.loc_tech_milp, rule=c_units_rule)
 
 def node_constraints_operational(model):
     m = model.m
@@ -889,18 +889,18 @@ def node_constraints_operational(model):
         m.c, m.loc_tech, m.t, rule=c_prod_max_rule)
     m.c_prod_min = po.Constraint(
         m.c, m.loc_tech, m.t, rule=c_prod_min_rule)
-    m.c_conversion_plus_prod_max = po.Constraint(
-        m.loc_tech_conversion_plus, m.t, rule=c_conversion_plus_prod_max_rule)
-    m.c_conversion_plus_prod_min = po.Constraint(
-        m.loc_tech_conversion_plus, m.t, rule=c_conversion_plus_prod_min_rule)
+#    m.c_conversion_plus_prod_max = po.Constraint(
+#        m.loc_tech_conversion_plus, m.t, rule=c_conversion_plus_prod_max_rule)
+#    m.c_conversion_plus_prod_min = po.Constraint(
+#        m.loc_tech_conversion_plus, m.t, rule=c_conversion_plus_prod_min_rule)
     m.c_con_max = po.Constraint(
         m.c, m.loc_tech, m.t, rule=c_con_max_rule)
     m.c_s_max = po.Constraint(
         m.loc_tech_store, m.t, rule=s_max_rule)
-    m.c_r2_max = po.Constraint(
-        m.loc_tech_r2, m.t, rule=r2_max_rule)
-    m.c_export_max = po.Constraint(
-        m.loc_tech_export, m.t, rule=c_export_max_rule)
+#    m.c_r2_max = po.Constraint(
+#        m.loc_tech_r2, m.t, rule=r2_max_rule)
+#    m.c_export_max = po.Constraint(
+#        m.loc_tech_export, m.t, rule=c_export_max_rule)
 
 
 def node_constraints_transmission(model):
@@ -930,20 +930,20 @@ def node_costs(model):
     weights = model.data['_weights'].to_series()
 
     cost_getter = utils.cost_getter(model.get_option)
-    depreciation_getter = utils.depreciation_getter(model.get_option)
-    cost_per_distance_getter = utils.cost_per_distance_getter(model.config_model)
+#    depreciation_getter = utils.depreciation_getter(model.get_option)
+#    cost_per_distance_getter = utils.cost_per_distance_getter(model.config_model)#
 
-    @utils.memoize
-    def _depreciation_rate(y, x, k):
-        return depreciation_getter(y, x, k)
+#    @utils.memoize
+#    def _depreciation_rate(y, x, k):
+#        return depreciation_getter(y, x, k)
 
     @utils.memoize
     def _cost(cost, y, k, x=None):
         return cost_getter(cost, y, k, x=x)
 
-    @utils.memoize
-    def _cost_per_distance(cost, y, k, x):
-        return cost_per_distance_getter(cost, y, k, x)
+#    @utils.memoize
+#    def _cost_per_distance(cost, y, k, x):
+#        return cost_per_distance_getter(cost, y, k, x)
 
     def _check_and_set(cost, loc_tech, y, x, k):
         """
@@ -1062,25 +1062,18 @@ def node_costs(model):
                 cost_op_fuel = (om_fuel * weights.loc[t] *
                                 (m.c_prod[carrier, loc_tech, t] / e_eff))
 
-        cost_op_r2 = 0
-        if loc_tech in m.loc_tech_r2:
-            r2_eff = get_constraint_param(model, 'r2_eff', y, x, t)
-            if po.value(r2_eff) > 0:  # in case r2_eff is zero, to avoid an infinite value
-                om_r2 = get_cost_param(model, 'om_r2', k, y, x, t)
-                cost_op_r2 = (om_r2 * weights.loc[t] * (m.r2[loc_tech, t] / r2_eff))
-
         return (m.cost_var[loc_tech, t, k] ==
-                cost_op_var + cost_op_fuel + cost_op_r2 + cost_export)
+                cost_op_var + cost_op_fuel + cost_export)
 
     def cost_rule(m, loc_tech, k):
         return (
             m.cost[loc_tech, k] ==
-            m.cost_fixed[loc_tech, k] +
+#            m.cost_fixed[loc_tech, k] +
             sum(m.cost_var[loc_tech, t, k] for t in m.t)
         )
 
     # Constraints
-    m.c_cost_fixed = po.Constraint(m.loc_tech, m.k, rule=cost_fixed_rule)
+#    m.c_cost_fixed = po.Constraint(m.loc_tech, m.k, rule=cost_fixed_rule)
     m.c_cost_var = po.Constraint(m.loc_tech, m.t, m.k, rule=cost_var_rule)
     m.c_cost = po.Constraint(m.loc_tech, m.k, rule=cost_rule)
 
@@ -1139,5 +1132,5 @@ def model_constraints(model):
             return po.Constraint.Skip
 
     # Constraints
-    m.c_export_balance = po.Constraint(m.c, m.loc_tech_export, m.t,
-                                       rule=c_export_balance_rule)
+    #m.c_export_balance = po.Constraint(m.c, m.loc_tech_export, m.t,
+    #                                   rule=c_export_balance_rule)
